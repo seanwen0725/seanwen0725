@@ -1,0 +1,71 @@
+# Main code and animation
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from IPython.display import HTML
+
+L = 1  # Length of the space
+size = 101  # number of graid point on each side
+dt = 0.01  # timestep (s)
+D = 0.001  # diffusion coefficient
+dx = L/size  # size of each grid
+tmax = 100  # maximum time (s)
+tfitmax = 10  # maximum time for gaussian curvefit (s)
+step = int((tmax/dt) + 1)  # total steps
+
+
+img = []  # The list for each frame of animation
+fig = plt.figure(figsize=(8, 8))  # The grid of animation
+
+"""initialize the space (C = 10 drop in the middle)"""
+C = np.zeros([size, size])
+C[size//2, size//2] = 10
+Cp = np.zeros([size, size])
+
+"""setting up for gaussian curvefit"""
+tfittime = np.linspace(0, tfitmax, 30)
+tfittime = tfittime ** 2 / tfitmax
+tfitstep = tfittime / dt
+tfitstep = tfitstep.astype(int)
+fitdata = np.zeros([len(tfitstep), size])
+
+"""setting up for the sum of concentration"""
+tsumtime = np.linspace(0, tmax, 40)
+tsumstep = tsumtime / dt
+tsumstep = tsumstep.astype(int)
+sumdata = np.zeros([len(tsumtime)])
+
+plotstep = np.linspace(0, int(tmax/dt), 501)  # step for plotting and animation
+
+k = dt * D / dx / dx  # the constant part for differential equation
+
+for i in range(step):
+    """Diffusion happens"""
+    Cp[1:-1, 1:-1] = C[1:-1, 1:-1] + k*((C[0:-2, 1:-1]
+                                         + C[2:, 1:-1] - 2 * C[1:-1, 1:-1])
+                                        + (C[1:-1, 0:-2]
+                                           + C[1:-1, 2:] - 2 * C[1:-1, 1:-1]))
+    Cp[0] = Cp[1]
+    Cp[-1] = Cp[-2]
+    Cp[:, 0] = Cp[:, 1]
+    Cp[:, -1] = Cp[:, -2]
+    Cp, C = C, Cp
+
+    """collecting data for each quesiton"""
+    if i in plotstep:
+        img.append((plt.pcolormesh(C.copy()),))
+    if i in tfitstep:
+        fitdata[np.where(tfitstep == i)] = C[50]
+    if i in tsumstep:
+        sumdata[np.where(tsumstep == i)] = np.sum(C)
+
+"""Progress and show the animation"""
+ani = animation.ArtistAnimation(fig, img, interval=50, repeat=False)
+ani.save('animation 1.webm', extra_args=['-vcodec', 'libvpx'])
+plt.close()
+
+del img
+del ani
+
+HTML('<video controls autoplay>'
+     + '<source src="animation 1.webm"type="video/webm"> </video>')
