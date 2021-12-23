@@ -1,0 +1,140 @@
+"""Maxwell Boltzmann Distribution"""
+
+# Main code and animation here
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from itertools import combinations
+from IPython.display import HTML
+import matplotlib
+
+npoint = 400  # total points
+nframe = 500  # total frames
+xmin, xmax, ymin, ymax = 0, 1, 0, 1  # boundary of x & y
+Dt = 0.00002  # time step(s)
+r = 0.0015  # radius of particle(m)
+m = 2.672E-26  # mass of particle(kg)
+kb = 1.38E-23  # Boltzmann constant(kgs^-2K^-1)
+
+
+def update_point(num):
+    """Function checking collisions and velocity change"""
+    global x, y, vx, vy
+    # provide some feedback so the user can see progress
+    print('.', end='')
+    for i in range(2):
+        """checking if the particle hits boundary"""
+        dx = Dt*vx
+        dy = Dt*vy
+        x = x + dx
+        y = y + dy
+        indx = np.where((x < xmin) | (x > xmax))
+        indy = np.where((y < ymin) | (y > ymax))
+        vx[indx] = -vx[indx]
+        vy[indy] = -vy[indy]
+
+        xx = np.asarray(list(combinations(x, 2)))
+        yy = np.asarray(list(combinations(y, 2)))
+        # Distances between particles:
+        dd = (xx[:, 0]-xx[:, 1])**2+(yy[:, 0]-yy[:, 1])**2
+        coli = np.where((dd <= (2 * r) ** 2))[0]
+        xx_new = np.asarray(list(combinations(np.arange(npoint), 2)))
+        collide = xx_new[coli]
+
+        for d in collide:
+            """change the velocity for colliding particles"""
+            ind1 = d[0]
+            ind2 = d[1]
+
+            v1 = np.array([vx[ind1], vy[ind1]])
+            v2 = np.array([vx[ind2], vy[ind2]])
+            r1 = np.array([x[ind1], y[ind1]])
+            r2 = np.array([x[ind2], y[ind2]])
+
+            v1_new = v1 - (np.dot(v1-v2, r1-r2)/np.dot(r1-r2, r1-r2)*(r1-r2))
+            v2_new = v2 - (np.dot(v2-v1, r2-r1)/np.dot(r2-r1, r2-r1)*(r2-r1))
+
+            vx[ind1] = v1_new[0]
+            vy[ind1] = v1_new[1]
+            vx[ind2] = v2_new[0]
+            vy[ind2] = v2_new[1]
+
+    data = np.stack((x, y), axis=-1)
+    im.set_offsets(data)
+
+
+"""setting up the grid for animation"""
+fig, ax = plt.subplots()
+plt.xlim(xmin, xmax)
+plt.ylim(ymin, ymax)
+
+"""set up the initial particles and color"""
+x = np.random.random(npoint)
+y = np.random.random(npoint)
+vx = -500.*np.ones(npoint)
+vy = np.zeros(npoint)
+vx[np.where(x <= 0.5)] = -vx[np.where(x <= 0.5)]
+colours = np.full(npoint, 'r')
+colours[x > 0.5] = 'b'
+
+im = ax.scatter(x, y, c=colours)
+im.set_sizes([20])
+
+"""Progress and show the animation"""
+anim = animation.FuncAnimation(fig,
+                               update_point, nframe, interval=30, repeat=False)
+anim.save('collide.webm', extra_args=['-vcodec', 'libvpx'])
+plt.close()
+HTML('<video controls autoplay> <source src="collide.webm" '
+     + 'type="video/webm"></video>')
+
+
+
+
+
+
+# Plots, fits and print temperature here
+from scipy.optimize import curve_fit
+
+vf = np.sqrt(vx**2 + vy**2)  # Calculation of final velocity(m/s)
+E = m * 0.5 * vf**2  # Calculation of energy(J)
+
+"""Plotting distribution of velocity probability"""
+vf_hist, bins = np.histogram(vf, bins=50)
+vf_bins = np.zeros(50)
+bin_size = bins[1] - bins[0]
+
+
+def vf_func(v, T):
+    """Analytical expressions for distribution of speed"""
+    return (m*v / (kb*T)) * np.exp(-m*v**2 / (2*kb*T))
+
+
+def E_func(E, T):
+    """Analytical expressions for distribution of Energy"""
+    return np.exp(-E / (kb*T)) / (kb*T)
+
+
+"""calculating Temperature using curve fit"""
+T, pcov = curve_fit(vf_func, bins[:-1], vf_hist/(sum(vf_hist)*bin_size))
+
+"""plotting histogram and curve fit to compare"""
+fig, axs = plt.subplots(2)
+axs[0].plot(np.linspace(0, 1200, 1000), vf_func(np.linspace(0, 1200, 1000), T))
+axs[0].hist(vf, 50, density=True)
+axs[0].set_title('Distribution of speed probability')
+axs[0].set_xlabel('speed (m/s)')
+axs[0].set_ylabel('Probability')
+
+axs[1].plot(np.linspace(0, 2E-20, 1000),
+            E_func(np.linspace(0, 2E-20, 1000), T))
+axs[1].hist(E, 50, density=True)
+axs[1].set_title('Distribution of energy probability')
+axs[1].set_xlabel('Energy (J)')
+axs[1].set_ylabel('Probability')
+
+plt.tight_layout()
+
+"""print out the result temperature"""
+T0 = "{:.2f}".format(T[-1])
+print('The temperature is', T0, 'K')
